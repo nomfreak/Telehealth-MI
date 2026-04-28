@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clinical Encounter Simulator — Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #090f1a;
+    --bg2: #0d1625;
+    --bg3: #111e30;
+    --teal: #0d9488;
+    --teal-light: #5eead4;
+    --blue: #0891b2;
+    --text: #f0f4f8;
+    --text-muted: rgba(240,244,248,0.5);
+    --text-dim: rgba(240,244,248,0.25);
+    --border: rgba(255,255,255,0.07);
+    --border-teal: rgba(94,234,212,0.25);
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overflow-x: hidden; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+  /* PASSWORD GATE */
+  #gate {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
+    background-image: radial-gradient(ellipse at 30% 30%, rgba(13,148,136,0.12) 0%, transparent 60%),
+                      radial-gradient(ellipse at 70% 70%, rgba(8,145,178,0.08) 0%, transparent 60%);
+  }
+  #gate.hidden { display: none !important; }
+  .gate-box {
+    background: var(--bg2); border: 1px solid var(--border-teal);
+    border-radius: 20px; padding: 48px 40px; width: 100%; max-width: 400px;
+    text-align: center; box-shadow: 0 0 80px rgba(13,148,136,0.15);
+  }
+  .gate-logo { font-family: 'Playfair Display', serif; font-size: 28px; color: var(--teal-light); margin-bottom: 6px; }
+  .gate-sub { font-size: 13px; color: var(--text-muted); letter-spacing: 2px; font-family: 'DM Mono', monospace; text-transform: uppercase; margin-bottom: 32px; }
+  .gate-input {
+    width: 100%; padding: 13px 16px; background: rgba(255,255,255,0.06);
+    border: 1.5px solid var(--border); border-radius: 10px; color: white;
+    font-size: 15px; font-family: 'DM Sans', sans-serif; outline: none;
+    text-align: center; letter-spacing: 3px; margin-bottom: 14px; transition: border 0.2s;
+  }
+  .gate-input:focus { border-color: var(--teal-light); }
+  .gate-btn {
+    width: 100%; padding: 14px; background: linear-gradient(135deg, var(--teal), var(--blue));
+    border: none; border-radius: 10px; color: white; font-size: 15px;
+    font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: opacity 0.2s;
+  }
+  .gate-btn:hover { opacity: 0.9; }
+  .gate-error { color: var(--red); font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+  /* APP */
+  #app { min-height: 100vh; }
+  #app.visible { display: block; }
+
+  /* PHASE BAR */
+  .phase-bar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(9,15,26,0.93); backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border); padding: 10px 20px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .phase-item { display: flex; align-items: center; gap: 5px; }
+  .phase-dot {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; transition: all 0.3s;
+    background: rgba(255,255,255,0.07); color: var(--text-dim);
+  }
+  .phase-dot.done { background: var(--teal); color: #090f1a; }
+  .phase-dot.active { background: var(--teal-light); color: #090f1a; }
+  .phase-label { font-size: 12px; font-family: 'DM Mono', monospace; color: var(--text-dim); transition: color 0.3s; }
+  .phase-label.active { color: var(--teal-light); }
+  .phase-label.done { color: var(--teal); }
+  .phase-sep { color: rgba(255,255,255,0.12); font-size: 13px; margin-left: 2px; }
+
+  /* SCREENS */
+  .screen { display: none; max-width: 720px; margin: 0 auto; padding: 40px 20px; }
+  .screen.active { display: block; }
+  .screen-title-eyebrow { font-size: 12px; letter-spacing: 3px; color: var(--teal-light); margin-bottom: 8px; font-family: 'DM Mono', monospace; text-transform: uppercase; }
+  .screen-title { font-size: 32px; font-weight: 800; color: white; margin-bottom: 8px; }
+  .screen-sub { font-size: 15px; color: var(--text-muted); margin-bottom: 36px; }
+
+  /* FORM ELEMENTS */
+  .field-label { display: block; font-size: 12px; letter-spacing: 2px; color: var(--teal-light); margin-bottom: 10px; font-family: 'DM Mono', monospace; text-transform: uppercase; }
+  .field-group { margin-bottom: 28px; }
+  .text-input {
+    width: 100%; padding: 13px 16px; background: rgba(255,255,255,0.07);
+    border: 1px solid var(--border); border-radius: 10px; color: white;
+    font-size: 15px; font-family: 'DM Sans', sans-serif; outline: none; transition: border 0.2s;
+  }
+  .text-input:focus { border-color: var(--teal-light); }
+  .text-input::placeholder { color: var(--text-dim); }
+  .card-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .card-grid-1 { display: flex; flex-direction: column; gap: 8px; }
+  .select-card {
+    padding: 14px 12px; background: rgba(255,255,255,0.04);
+    border: 1.5px solid var(--border); border-radius: 12px; cursor: pointer;
+    text-align: center; transition: all 0.18s;
+  }
+  .select-card:hover { border-color: rgba(94,234,212,0.4); background: rgba(94,234,212,0.06); }
+  .select-card.selected { background: rgba(94,234,212,0.12); border-color: var(--teal-light); }
+  .select-card .card-icon { font-size: 26px; margin-bottom: 8px; }
+  .select-card .card-title { font-size: 14px; font-weight: 700; color: white; margin-bottom: 3px; }
+  .select-card .card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+  .patient-card {
+    padding: 14px 16px; background: rgba(255,255,255,0.03);
+    border: 1.5px solid var(--border); border-radius: 12px; cursor: pointer;
+    display: flex; align-items: center; gap: 14px; transition: all 0.18s;
+  }
+  .patient-card:hover { border-color: rgba(94,234,212,0.35); background: rgba(94,234,212,0.05); }
+  .patient-card.selected { background: rgba(94,234,212,0.1); border-color: var(--teal-light); }
+  .patient-avatar { font-size: 30px; }
+  .patient-name { font-weight: 700; color: white; font-size: 15px; margin-bottom: 2px; }
+  .patient-meta { font-size: 13px; color: var(--text-muted); }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
+  .badge-age { background: rgba(255,255,255,0.09); color: rgba(255,255,255,0.55); }
+  .primary-btn {
+    width: 100%; padding: 16px; background: linear-gradient(135deg, var(--teal), var(--blue));
+    border: none; border-radius: 12px; color: white; font-size: 16px;
+    font-weight: 700; cursor: pointer; font-family: 'DM Sans', sans-serif;
+    letter-spacing: 0.3px; transition: opacity 0.2s;
+  }
+  .primary-btn:disabled { background: rgba(255,255,255,0.07); cursor: not-allowed; }
+  .primary-btn:not(:disabled):hover { opacity: 0.9; }
+
+  /* ENV CHECK */
+  .env-question { margin-bottom: 20px; }
+  .env-q-label { font-size: 15px; color: rgba(255,255,255,0.85); margin-bottom: 8px; font-weight: 600; }
+  .env-option {
+    padding: 11px 14px; background: rgba(255,255,255,0.03);
+    border: 1.5px solid var(--border); border-radius: 9px; cursor: pointer;
+    font-size: 14px; color: rgba(255,255,255,0.8); margin-bottom: 6px; transition: all 0.15s;
+  }
+  .env-option:hover { border-color: rgba(94,234,212,0.3); }
+  .env-option.selected { background: rgba(94,234,212,0.12); border-color: var(--teal-light); }
+  .env-result-card {
+    display: flex; gap: 12px; padding: 11px 14px; background: rgba(255,255,255,0.04);
+    border-radius: 9px; margin-bottom: 7px; align-items: flex-start;
+  }
+  .env-result-icon { font-size: 17px; flex-shrink: 0; }
+  .env-result-title { font-size: 14px; color: white; font-weight: 600; margin-bottom: 2px; }
+  .env-result-desc { font-size: 13px; color: var(--text-muted); }
+  .tip-box { padding: 13px 16px; background: rgba(94,234,212,0.07); border-radius: 10px; border: 1px solid rgba(94,234,212,0.2); margin: 12px 0 20px; }
+  .tip-label { font-size: 11px; color: var(--teal-light); font-family: 'DM Mono', monospace; letter-spacing: 1px; margin-bottom: 4px; }
+  .tip-text { font-size: 14px; color: rgba(255,255,255,0.7); line-height: 1.6; }
+
+  /* ENCOUNTER */
+  .encounter-wrap { display: flex; flex-direction: column; height: 100vh; max-height: 820px; }
+
+  /* audio UI */
+  .audio-ui {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 22px 20px; background: linear-gradient(180deg,#0d1f2d,#090f1a);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  .audio-avatar-wrap { position: relative; margin-bottom: 12px; }
+  .audio-avatar {
+    width: 76px; height: 76px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1);
+    display: flex; align-items: center; justify-content: center; font-size: 38px;
+  }
+  .audio-ring {
+    position: absolute; inset: -7px; border-radius: 50%;
+    border: 2px solid rgba(94,234,212,0.45); animation: speakPulse 1s ease-in-out infinite; display: none;
+  }
+  .audio-ring.active { display: block; }
+  .audio-name { font-weight: 700; color: white; font-size: 16px; margin-bottom: 3px; }
+  .audio-cond { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+  .audio-status { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+  .audio-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: speakPulse 2s infinite; }
+  .audio-label { font-size: 13px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+  .audio-note { padding: 6px 18px; background: rgba(239,68,68,0.08); border-radius: 20px; border: 1px solid rgba(239,68,68,0.2); font-size: 13px; color: #f87171; font-family: 'DM Mono', monospace; }
+
+  /* video UI */
+  .video-ui { background: #0e1825; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .video-bar { padding: 6px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); background: #0a1219; }
+  .video-status { display: flex; align-items: center; gap: 8px; }
+  .video-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  .video-label { font-size: 13px; color: var(--text-muted); font-family: 'DM Mono', monospace; }
+  .video-time { font-size: 12px; color: var(--text-dim); font-family: 'DM Mono', monospace; }
+  .video-tiles { display: grid; grid-template-columns: 1fr 155px; gap: 8px; padding: 10px 14px 6px; }
+  .patient-tile {
+    position: relative; background: #0d1820; border-radius: 12px; overflow: hidden;
+    aspect-ratio: 16/9; border: 2px solid rgba(255,255,255,0.08); transition: border-color 0.3s;
+  }
+  .patient-tile.speaking { border-color: rgba(94,234,212,0.6); }
+  .tile-name-bar { position: absolute; bottom: 8px; left: 10px; display: flex; gap: 6px; }
+  .tile-name { padding: 3px 9px; background: rgba(0,0,0,0.65); border-radius: 6px; font-size: 13px; color: white; font-weight: 600; }
+  .tile-speaking { padding: 3px 9px; background: rgba(94,234,212,0.2); border: 1px solid rgba(94,234,212,0.4); border-radius: 6px; font-size: 12px; color: var(--teal-light); }
+  .self-col { display: flex; flex-direction: column; gap: 6px; }
+  .self-tile { background: #162030; border-radius: 10px; overflow: hidden; aspect-ratio: 4/3; border: 1.5px solid rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center; }
+  .self-tile-inner { text-align: center; }
+  .self-tile-icon { font-size: 26px; }
+  .self-tile-label { font-size: 10px; color: var(--text-dim); font-family: 'DM Mono', monospace; margin-top: 3px; }
+  .observe-panel { flex: 1; background: rgba(0,0,0,0.25); border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); padding: 7px 8px; overflow-y: auto; max-height: 88px; }
+  .observe-label { font-size: 10px; color: var(--text-dim); font-family: 'DM Mono', monospace; margin-bottom: 4px; letter-spacing: 1px; }
+  .nv-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(255,255,255,0.06); border-radius: 20px; margin: 2px 2px 0 0; cursor: pointer; border: 1px solid rgba(148,163,184,0.3); font-size: 12px; }
+  .nv-tag .nv-dots { font-size: 11px; }
+  .nv-tag .nv-text { color: rgba(255,255,255,0.4); }
+  .nv-tag.revealed .nv-text { color: rgba(255,255,255,0.8); }
+  .video-toolbar { display: flex; justify-content: center; gap: 10px; padding: 6px 14px 10px; }
+  .toolbar-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 12px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.09); border-radius: 8px; cursor: pointer; color: rgba(255,255,255,0.6); font-size: 11px; font-family: 'DM Mono', monospace; }
+  .toolbar-btn .tb-icon { font-size: 15px; }
+
+  /* in-person UI */
+  .inperson-ui { background: #f5f0eb; border-bottom: 3px solid #d4c9b8; flex-shrink: 0; position: relative; overflow: hidden; }
+  .ip-room-bg { position: absolute; inset: 0; background: linear-gradient(180deg,#e8e0d5 0%,#f2ece4 60%,#d9cfc3 100%); z-index: 0; }
+  .ip-wall { position: absolute; top: 0; left: 0; right: 0; height: 55%; background: #ddd5c8; border-bottom: 3px solid #c8bfb0; z-index: 1; }
+  .ip-floor { position: absolute; bottom: 0; left: 0; right: 0; height: 12px; background: #b8a898; z-index: 1; }
+  .ip-table { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 70%; height: 18px; background: #4a7c7a; border-radius: 4px 4px 0 0; z-index: 2; opacity: 0.6; }
+  .ip-paper { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 60%; height: 16px; background: white; border-radius: 3px 3px 0 0; z-index: 3; opacity: 0.8; }
+  .ip-observe { position: absolute; top: 6px; right: 8px; z-index: 10; display: flex; flex-direction: column; gap: 3px; max-width: 180px; }
+  .ip-header { position: relative; z-index: 10; padding: 6px 14px; display: flex; align-items: center; justify-content: space-between; background: rgba(74,124,122,0.15); border-bottom: 1px solid rgba(74,124,122,0.2); }
+  .ip-header-label { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #3d5a59; font-family: 'DM Mono', monospace; font-weight: 600; }
+  .ip-time { font-size: 12px; color: rgba(60,40,20,0.45); font-family: 'DM Mono', monospace; }
+  .ip-patient-area { position: relative; z-index: 10; display: flex; justify-content: center; align-items: flex-end; padding: 8px 20px 0; height: 170px; }
+  .ip-chair-back { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 120px; height: 130px; background: #8b7355; border-radius: 8px 8px 0 0; z-index: 1; opacity: 0.7; }
+  .ip-chair-seat { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 150px; height: 25px; background: #7a6347; border-radius: 4px; z-index: 1; }
+  .ip-face-wrap { position: relative; z-index: 5; width: 200px; height: 160px; }
+  .ip-footer { position: relative; z-index: 10; padding: 6px 14px 10px; display: flex; align-items: center; justify-content: space-between; background: rgba(74,124,122,0.1); }
+  .ip-patient-info { display: flex; align-items: center; gap: 8px; }
+  .ip-patient-name { font-weight: 700; color: #2d4a49; font-size: 15px; }
+  .ip-condition { font-size: 12px; color: rgba(45,74,73,0.6); padding: 2px 8px; background: rgba(74,124,122,0.15); border-radius: 10px; }
+  .ip-speaking { padding: 3px 10px; background: rgba(74,124,122,0.2); border: 1px solid rgba(74,124,122,0.4); border-radius: 10px; font-size: 12px; color: #3d7a78; font-weight: 600; }
+
+  /* MI HINT */
+  .mi-hint-bar { padding: 7px 16px; background: rgba(94,234,212,0.08); border-bottom: 1px solid rgba(94,234,212,0.18); flex-shrink: 0; display: flex; gap: 9px; align-items: flex-start; }
+  .mi-hint-label { font-size: 11px; color: var(--teal-light); font-family: 'DM Mono', monospace; margin-top: 2px; flex-shrink: 0; }
+  .mi-hint-text { font-size: 14px; color: rgba(255,255,255,0.75); line-height: 1.5; }
+
+  /* NOTES */
+  .notes-panel { flex-shrink: 0; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.3); padding: 10px 14px; }
+  .notes-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .notes-title { font-size: 13px; color: var(--teal-light); font-family: 'DM Mono', monospace; letter-spacing: 1px; }
+  .notes-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; }
+  textarea.notes-ta {
+    width: 100%; padding: 10px 12px; background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border); border-radius: 9px; color: white; font-size: 14px;
+    resize: none; outline: none; line-height: 1.6; font-family: 'DM Sans', sans-serif;
+  }
+  textarea.notes-ta::placeholder { color: var(--text-dim); }
+
+  /* CHAT */
+  .chat-area { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 11px; }
+  .msg-wrap { display: flex; flex-direction: column; max-width: 82%; }
+  .msg-wrap.patient { align-self: flex-start; align-items: flex-start; }
+  .msg-wrap.student { align-self: flex-end; align-items: flex-end; }
+  .msg-sender { font-size: 11px; color: var(--text-dim); margin-bottom: 3px; font-family: 'DM Mono', monospace; padding-left: 4px; }
+  .msg-bubble {
+    padding: 10px 14px; font-size: 15px; color: rgba(255,255,255,0.9); line-height: 1.65;
+    border-radius: 4px 14px 14px 14px;
+  }
+  .msg-bubble.patient { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.05); }
+  .msg-bubble.student { background: rgba(14,165,148,0.22); border: 1px solid rgba(94,234,212,0.12); border-radius: 14px 4px 14px 14px; }
+  .msg-typing { align-self: flex-start; padding: 10px 14px; background: rgba(255,255,255,0.05); border-radius: 4px 14px 14px 14px; font-size: 14px; color: var(--text-dim); font-style: italic; display: none; }
+  .msg-typing.visible { display: block; }
+
+  /* INPUT BAR */
+  .input-bar { padding: 10px 14px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.25); flex-shrink: 0; }
+  .input-row { display: flex; gap: 8px; align-items: flex-end; }
+  .notes-toggle-btn {
+    padding: 10px 12px; background: rgba(255,255,255,0.07); border: 1px solid var(--border);
+    border-radius: 9px; cursor: pointer; font-size: 16px; flex-shrink: 0; color: rgba(255,255,255,0.7); transition: all 0.15s;
+  }
+  .notes-toggle-btn.active { background: rgba(94,234,212,0.2); border-color: rgba(94,234,212,0.4); }
+  textarea.chat-input {
+    flex: 1; padding: 10px 13px; background: rgba(255,255,255,0.07); border: 1px solid var(--border);
+    border-radius: 10px; color: white; font-size: 15px; resize: none; outline: none;
+    line-height: 1.5; font-family: 'DM Sans', sans-serif;
+  }
+  textarea.chat-input::placeholder { color: var(--text-dim); }
+  .send-col { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+  .send-btn {
+    padding: 10px 18px; background: linear-gradient(135deg, var(--teal), var(--blue));
+    border: none; border-radius: 9px; color: white; font-weight: 700; cursor: pointer; font-size: 17px;
+    opacity: 0.4; transition: opacity 0.2s;
+  }
+  .send-btn.ready { opacity: 1; }
+  .end-btn { padding: 5px 8px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px; color: #f87171; font-size: 11px; cursor: pointer; font-family: 'DM Mono', monospace; }
+
+  /* MODAL */
+  .modal-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.75); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal-overlay.visible { display: flex; }
+  .modal-box { background: #0f1923; border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; padding: 30px; max-width: 380px; width: 90%; text-align: center; }
+  .modal-icon { font-size: 26px; margin-bottom: 10px; }
+  .modal-title { color: white; margin: 0 0 8px; font-size: 18px; font-weight: 700; }
+  .modal-sub { color: var(--text-muted); font-size: 14px; margin: 0 0 22px; line-height: 1.5; }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-cancel { flex: 1; padding: 11px; background: rgba(255,255,255,0.07); border: 1px solid var(--border); border-radius: 9px; color: white; cursor: pointer; font-size: 14px; font-family: 'DM Sans', sans-serif; }
+  .modal-confirm { flex: 1; padding: 11px; background: linear-gradient(135deg, var(--teal), var(--blue)); border: none; border-radius: 9px; color: white; font-weight: 700; cursor: pointer; font-size: 14px; font-family: 'DM Sans', sans-serif; }
+
+  /* ASSESSMENT */
+  .assess-section { margin-bottom: 28px; padding: 20px; background: rgba(255,255,255,0.04); border-radius: 14px; border: 1px solid var(--border); }
+  .assess-section-label { font-size: 13px; color: var(--teal-light); font-family: 'DM Mono', monospace; letter-spacing: 1px; margin-bottom: 12px; }
+  .assess-section-sub { font-size: 14px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.6; }
+  .ttm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ttm-card { padding: 12px 14px; background: rgba(255,255,255,0.04); border: 1.5px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.15s; }
+  .ttm-card:hover { border-color: rgba(94,234,212,0.3); }
+  .ttm-card.selected { background: rgba(94,234,212,0.13); border-color: var(--teal-light); }
+  .ttm-card-title { font-size: 14px; font-weight: 700; color: white; margin-bottom: 2px; }
+  .ttm-card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+  .ruler-row { display: flex; gap: 7px; flex-wrap: wrap; }
+  .ruler-num {
+    width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
+    border-radius: 10px; border: 2px solid rgba(148,163,184,0.25); background: rgba(255,255,255,0.04);
+    cursor: pointer; font-size: 16px; font-weight: 700; color: #94a3b8; transition: all 0.15s;
+  }
+  .ruler-num:hover { border-color: rgba(94,234,212,0.4); }
+  .ruler-num.r-low { border-color: rgba(239,68,68,0.25); color: #f87171; }
+  .ruler-num.r-mid { border-color: rgba(245,158,11,0.25); color: #f59e0b; }
+  .ruler-num.r-high { border-color: rgba(34,197,94,0.25); color: #86efac; }
+  .ruler-num.selected { background: rgba(94,234,212,0.18); border-color: var(--teal-light); color: var(--teal-light); }
+  textarea.assess-ta {
+    width: 100%; padding: 10px 13px; background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.09); border-radius: 9px; color: white;
+    font-size: 14px; resize: none; outline: none; line-height: 1.6; font-family: 'DM Sans', sans-serif; margin-bottom: 14px;
+  }
+  textarea.assess-ta::placeholder { color: var(--text-dim); }
+  textarea.assess-ta:last-child { margin-bottom: 0; }
+  .assess-field-label { display: block; font-size: 14px; color: rgba(255,255,255,0.7); margin-bottom: 6px; font-weight: 600; }
+  .assess-field-note { color: var(--text-muted); font-weight: 400; font-size: 13px; }
+
+  /* DEBRIEF */
+  .debrief-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .score-ring-row { display: flex; justify-content: center; gap: 28px; margin-bottom: 24px; padding: 18px; background: rgba(255,255,255,0.04); border-radius: 14px; border: 1px solid var(--border); }
+  .tab-bar { display: flex; gap: 6px; margin-bottom: 20px; overflow-x: auto; padding-bottom: 2px; }
+  .tab-btn { padding: 9px 18px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); border-radius: 9px; color: rgba(255,255,255,0.55); font-size: 14px; cursor: pointer; white-space: nowrap; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
+  .tab-btn.active { background: rgba(94,234,212,0.14); border-color: var(--teal-light); color: var(--teal-light); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .score-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .score-box { padding: 16px; border-radius: 12px; }
+  .score-box-label { font-size: 12px; color: var(--text-muted); font-family: 'DM Mono', monospace; margin-bottom: 6px; }
+  .score-box-val { font-size: 18px; font-weight: 800; }
+  .score-box-sub { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+  .strength-box { padding: 14px 16px; background: rgba(94,234,212,0.07); border-radius: 12px; border: 1px solid rgba(94,234,212,0.14); margin-bottom: 18px; }
+  .strength-label { font-size: 12px; color: var(--teal-light); font-family: 'DM Mono', monospace; letter-spacing: 1px; margin-bottom: 6px; }
+  .strength-text { color: rgba(255,255,255,0.75); font-size: 15px; line-height: 1.7; }
+  .skill-bar-wrap { margin-bottom: 14px; }
+  .skill-bar-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .skill-bar-name { font-size: 15px; color: rgba(255,255,255,0.85); }
+  .skill-bar-score { font-size: 15px; font-weight: 700; }
+  .skill-bar-bg { height: 7px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; }
+  .skill-bar-fill { height: 100%; border-radius: 4px; transition: width 1.2s ease; }
+  .growth-box { padding: 13px 16px; background: rgba(255,255,255,0.04); border-radius: 10px; border: 1px solid var(--border); }
+  .growth-label { font-size: 12px; color: var(--text-muted); font-family: 'DM Mono', monospace; letter-spacing: 1px; margin-bottom: 10px; }
+  .growth-item { display: flex; gap: 10px; padding: 7px 0; font-size: 14px; color: rgba(255,255,255,0.7); border-bottom: 1px solid rgba(255,255,255,0.04); line-height: 1.6; }
+  .growth-item:last-child { border-bottom: none; }
+  .growth-arrow { color: var(--amber); flex-shrink: 0; }
+  .ttm-track { display: flex; justify-content: space-between; padding: 16px 10px; background: rgba(255,255,255,0.03); border-radius: 12px; position: relative; margin-bottom: 16px; }
+  .ttm-node { flex: 1; text-align: center; position: relative; }
+  .ttm-line { position: absolute; top: 16px; left: 50%; right: -50%; height: 2px; background: rgba(255,255,255,0.08); z-index: 0; }
+  .ttm-circle { width: 32px; height: 32px; border-radius: 50%; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center; z-index: 1; position: relative; font-size: 13px; font-weight: 700; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.25); }
+  .ttm-circle.actual { background: var(--teal-light); color: #090f1a; }
+  .ttm-circle.pick { background: var(--amber); color: #090f1a; }
+  .ttm-node-label { font-size: 10px; color: var(--text-dim); font-family: 'DM Mono', monospace; }
+  .ttm-node-sub { font-size: 9px; margin-top: 1px; }
+  .ruler-display { padding: 14px; background: rgba(255,255,255,0.04); border-radius: 12px; border: 1px solid var(--border); margin-bottom: 14px; }
+  .ruler-display-label { font-size: 12px; color: var(--text-muted); font-family: 'DM Mono', monospace; margin-bottom: 8px; }
+  .ruler-bar { height: 10px; background: rgba(255,255,255,0.07); border-radius: 5px; overflow: hidden; margin-bottom: 4px; }
+  .ruler-fill { height: 100%; background: linear-gradient(90deg, var(--red), var(--amber), var(--green)); border-radius: 5px; transition: width 1s ease; }
+  .ruler-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); }
+  .field-card { padding: 12px 14px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 9px; }
+  .field-card-label { font-size: 12px; color: var(--text-muted); font-family: 'DM Mono', monospace; margin-bottom: 4px; letter-spacing: 1px; text-transform: uppercase; }
+  .field-card-val { font-size: 14px; color: rgba(255,255,255,0.8); line-height: 1.6; white-space: pre-wrap; }
+  .rr-box { padding: 13px 16px; background: rgba(239,68,68,0.07); border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); margin-bottom: 14px; }
+  .rr-label { font-size: 12px; color: #f87171; font-family: 'DM Mono', monospace; letter-spacing: 1px; margin-bottom: 8px; }
+  .rr-item { font-size: 13px; color: rgba(255,255,255,0.6); padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-style: italic; }
+  .nv-list-item { padding: 13px 16px; background: rgba(255,255,255,0.04); border-radius: 10px; margin-bottom: 8px; border: 1px solid var(--border); display: flex; gap: 14px; align-items: center; }
+  .nv-turn { flex-shrink: 0; text-align: center; min-width: 48px; }
+  .nv-turn-label { font-size: 11px; color: var(--text-dim); font-family: 'DM Mono', monospace; }
+  .nv-turn-score { font-size: 20px; font-weight: 700; }
+  .nv-desc { font-size: 15px; color: rgba(255,255,255,0.85); margin-bottom: 3px; }
+  .nv-hint { font-size: 12px; color: var(--text-dim); }
+  .bias-strength-box { padding: 13px 16px; background: rgba(34,197,94,0.08); border-radius: 10px; border: 1px solid rgba(34,197,94,0.15); margin-bottom: 14px; }
+  .bias-strength-label { font-size: 12px; color: #86efac; font-family: 'DM Mono', monospace; margin-bottom: 8px; }
+  .bias-strength-item { font-size: 14px; color: rgba(255,255,255,0.7); padding: 3px 0; }
+  .bias-pattern { padding: 13px 14px; background: rgba(255,255,255,0.04); border-radius: 10px; margin-bottom: 8px; }
+  .bias-pattern-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .bias-pattern-cat { font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.85); }
+  .bias-sev { font-size: 11px; padding: 2px 8px; background: rgba(255,255,255,0.07); border-radius: 10px; color: var(--text-muted); }
+  .bias-quote { font-size: 13px; font-style: italic; color: var(--text-muted); margin-bottom: 6px; }
+  .bias-explain { font-size: 14px; color: rgba(255,255,255,0.65); line-height: 1.6; margin-bottom: 6px; }
+  .bias-alt { font-size: 13px; color: var(--teal-light); line-height: 1.6; }
+  .reflect-prompts { padding: 14px 16px; background: rgba(94,234,212,0.06); border-radius: 10px; border: 1px solid rgba(94,234,212,0.12); margin-top: 8px; }
+  .reflect-label { font-size: 12px; color: var(--teal-light); font-family: 'DM Mono', monospace; margin-bottom: 10px; }
+  .reflect-item { font-size: 14px; color: rgba(255,255,255,0.65); padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); line-height: 1.6; }
+  .reflect-item:last-child { border-bottom: none; }
+  .self-reflect-box { padding: 16px; background: rgba(94,234,212,0.07); border-radius: 12px; border: 1px solid rgba(94,234,212,0.14); margin-bottom: 20px; }
+  .self-reflect-label { font-size: 12px; color: var(--teal-light); font-family: 'DM Mono', monospace; letter-spacing: 1px; margin-bottom: 8px; }
+  .self-reflect-text { color: rgba(255,255,255,0.65); font-size: 14px; line-height: 1.7; }
+  .auto-saved-box { margin-top: 20px; padding: 12px 16px; background: rgba(94,234,212,0.06); border-radius: 10px; border: 1px solid rgba(94,234,212,0.15); text-align: center; }
+  .auto-saved-title { font-size: 13px; color: var(--teal-light); font-family: 'DM Mono', monospace; margin-bottom: 3px; }
+  .auto-saved-sub { font-size: 12px; color: var(--text-muted); }
+
+  /* SVG FACE */
+  .face-svg { width: 100%; height: 100%; transition: all 0.5s ease; }
+
+  @keyframes speakPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(1.06)} }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+
+<!-- PASSWORD GATE -->
+<div id="gate">
+  <div class="gate-box">
+    <div class="gate-logo">Clinical Encounter Simulator</div>
+    <div class="gate-sub">Demo Version</div>
+    <input type="password" class="gate-input" id="gateInput" placeholder="Enter password" onkeydown="if(event.key==='Enter')checkPassword()">
+    <button class="gate-btn" onclick="checkPassword()">Enter →</button>
+    <div class="gate-error" id="gateError"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <!-- Phase Bar -->
+  <div class="phase-bar" id="phaseBar"></div>
+
+  <!-- SETUP -->
+  <div class="screen active" id="screen-setup">
+    <div style="text-align:center;margin-bottom:36px">
+      <div class="screen-title-eyebrow">Clinical Encounter Simulator</div>
+      <div class="screen-title">Configure Your Session</div>
+      <div class="screen-sub">Set up your patient encounter before beginning</div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Your Name</label>
+      <input type="text" class="text-input" id="studentName" placeholder="Enter your name for the session report">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Visit Format</label>
+      <div class="card-grid-3" id="visitTypeGrid"></div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Patient</label>
+      <div class="card-grid-1" id="patientGrid"></div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">MI Feedback Mode</label>
+      <div class="card-grid-3" id="feedbackModeGrid"></div>
+    </div>
+    <button class="primary-btn" id="startBtn" disabled onclick="startSession()">Begin Encounter →</button>
+  </div>
+
+  <!-- ENV CHECK -->
+  <div class="screen" id="screen-env">
+    <div style="text-align:center;margin-bottom:28px">
+      <div class="screen-title-eyebrow">Pre-Encounter</div>
+      <div class="screen-title">Environment & Setup Check</div>
+      <div class="screen-sub" id="envVisitLabel"></div>
+    </div>
+    <div id="envQuestions"></div>
+    <button class="primary-btn" id="envCheckBtn" disabled onclick="runEnvCheck()">Check My Setup →</button>
+    <div id="envResult" style="display:none;margin-top:20px"></div>
+  </div>
+
+  <!-- ENCOUNTER -->
+  <div class="screen" id="screen-encounter" style="max-width:100%;padding:0">
+    <div class="encounter-wrap" id="encounterWrap">
+      <div id="visualLayer"></div>
+      <div class="mi-hint-bar" id="miHintBar" style="display:none">
+        <span class="mi-hint-label">MI COACH</span>
+        <span class="mi-hint-text" id="miHintText"></span>
+      </div>
+      <div class="notes-panel" id="notesPanel" style="display:none">
+        <div class="notes-header">
+          <span class="notes-title">📋 PATIENT NOTES</span>
+          <button class="notes-close" onclick="toggleNotes()">✕</button>
+        </div>
+        <textarea class="notes-ta" id="notesTA" rows="4" placeholder="Notes, key statements, behavior change observations…"></textarea>
+      </div>
+      <div class="chat-area" id="chatArea"></div>
+      <div class="input-bar">
+        <div class="input-row">
+          <button class="notes-toggle-btn" id="notesToggleBtn" onclick="toggleNotes()" title="Toggle notes">📋</button>
+          <textarea class="chat-input" id="chatInput" rows="2" placeholder="Type your response… (Enter to send)" onkeydown="handleChatKey(event)" oninput="updateSendBtn()"></textarea>
+          <div class="send-col">
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">→</button>
+            <button class="end-btn" onclick="showEndModal()">END</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-overlay" id="endModal">
+        <div class="modal-box">
+          <div class="modal-icon">🏁</div>
+          <div class="modal-title">End this session?</div>
+          <div class="modal-sub">You'll move to your clinical assessment, then the full debrief.</div>
+          <div class="modal-btns">
+            <button class="modal-cancel" onclick="hideEndModal()">Keep Going</button>
+            <button class="modal-confirm" onclick="endEncounter()">End & Assess →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ASSESSMENT -->
+  <div class="screen" id="screen-assessment">
+    <div style="text-align:center;margin-bottom:32px">
+      <div class="screen-title-eyebrow">Post-Encounter</div>
+      <div class="screen-title">Clinical Assessment</div>
+      <div class="screen-sub">Complete before viewing your scored debrief</div>
+    </div>
+    <div class="assess-section">
+      <div class="assess-section-label">1. READINESS TO CHANGE — TTM STAGE</div>
+      <div class="assess-section-sub" id="assessStagePrompt"></div>
+      <div class="ttm-grid" id="ttmGrid"></div>
+    </div>
+    <div class="assess-section">
+      <div class="assess-section-label">2. READINESS RULER (1–10)</div>
+      <div class="assess-section-sub" id="assessRulerPrompt"></div>
+      <div class="ruler-row" id="rulerRow"></div>
+    </div>
+    <div class="assess-section">
+      <div class="assess-section-label">3. CHANGE TALK & SUSTAIN TALK</div>
+      <label class="assess-field-label">Change talk you heard <span class="assess-field-note">(desire, ability, reasons, need to change)</span></label>
+      <textarea class="assess-ta" id="changeTalkTA" rows="3" placeholder="e.g. 'I know I need to do something about this'…"></textarea>
+      <label class="assess-field-label">Sustain talk you heard <span class="assess-field-note">(optional)</span></label>
+      <textarea class="assess-ta" id="sustainTalkTA" rows="2" placeholder="e.g. 'I've always eaten this way'…"></textarea>
+    </div>
+    <div class="assess-section">
+      <div class="assess-section-label">4. PATIENT AMBIVALENCE & GOALS</div>
+      <label class="assess-field-label">Describe the patient's ambivalence</label>
+      <textarea class="assess-ta" id="ambivalenceTA" rows="2" placeholder="What are they torn between?"></textarea>
+      <label class="assess-field-label">Patient's own behavior change goal</label>
+      <textarea class="assess-ta" id="patientGoalTA" rows="2" placeholder="In their words if possible…"></textarea>
+    </div>
+    <div class="assess-section">
+      <div class="assess-section-label">5. PLAN & NEXT STEPS</div>
+      <textarea class="assess-ta" id="nextStepsTA" rows="3" placeholder="Follow-up actions, stage-matched strategies for next session…"></textarea>
+    </div>
+    <div class="assess-section">
+      <div class="assess-section-label">6. SESSION NOTES (review / edit)</div>
+      <textarea class="assess-ta" id="sessionNotesTA" rows="4"></textarea>
+    </div>
+    <button class="primary-btn" id="assessSubmitBtn" disabled onclick="submitAssessment()">Submit Assessment & View Debrief →</button>
+    <p style="text-align:center;font-size:13px;color:var(--text-dim);margin-top:10px" id="assessHint">Complete TTM stage, readiness ruler, change talk, and next steps to continue</p>
+  </div>
+
+  <!-- DEBRIEF -->
+  <div class="screen" id="screen-debrief">
+    <div class="debrief-header">
+      <div>
+        <div class="screen-title-eyebrow">Session Complete</div>
+        <div class="screen-title" style="font-size:26px">Encounter Debrief</div>
+        <div id="debriefMeta" style="color:var(--text-muted);font-size:14px;margin-top:4px"></div>
+      </div>
+    </div>
+    <div class="score-ring-row" id="scoreRingRow"></div>
+    <div class="tab-bar" id="tabBar"></div>
+    <div id="tabContent"></div>
+    <div class="auto-saved-box">
+      <div class="auto-saved-title">✓ Demo session complete</div>
+      <div class="auto-saved-sub">In the live version, this session would auto-save to your instructor's dashboard.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── PASSWORD ─────────────────────────────────────────────────────────────────
+function revealNvTag(el) {
+  el.classList.add('revealed');
+  el.querySelector('.nv-text').textContent = el.dataset.desc + ' · ' + el.dataset.hint;
+}
+const DEMO_PASSWORD = "demo2025";
+function checkPassword() {
+  const input = document.getElementById('gateInput');
+  const val = (input.value || '').trim();
+  if (val === DEMO_PASSWORD) {
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    setTimeout(initApp, 50);
+  } else {
+    document.getElementById('gateError').textContent = 'Incorrect password. Try again.';
+    document.getElementById('gateInput').select();
+  }
+}
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+const PERSONAS = [
+  { id:"maria", name:"Maria Gonzalez", age:52, pronoun:"she/her", condition:"Type 2 Diabetes",
+    readinessStage:"precontemplation", skinTone:"#C8956C", avatar:"👩‍🦳",
+    scripts: {
+      opening: "I mean, I'm here because my doctor told me I had to come. I don't really see what changing what I eat is going to do. My family has eaten this way for generations.",
+      responses: [
+        { trigger: "open", text: "I guess… I'm worried about my numbers. But I cook for my whole family. I can't just make a different meal for myself." },
+        { trigger: "reflect", text: "Yeah, exactly. It feels like if I change my food, I'm saying there's something wrong with how my mother cooked. With who we are." },
+        { trigger: "advice", text: "[crosses arms, looks away] I've heard that before. It's not that simple. Do you know how much those 'healthy' foods cost?" },
+        { trigger: "default", text: "I don't know. Maybe. I just don't see how it's possible with my life the way it is right now." },
+        { trigger: "affirm", text: "[slight softening, uncrosses arms] I do want to be around for my grandchildren. I just… I don't know where I'd even start." }
+      ],
+      nvCues: [
+        { description:"crosses arms, avoids eye contact", intensity:3 },
+        { description:"shifts in seat, glances at phone", intensity:2 },
+        { description:"slight softening in posture", intensity:2 },
+        { description:"tense jaw, looks toward door", intensity:3 },
+        { description:"brief eye contact, then looks down", intensity:2 }
+      ],
+      miScores: { overall:65, spirit:72, skills: { openQ:6, reflections:5, affirmations:4, summaries:3, changeTalk:5, resistance:6 }, righting:["You really should try cutting back on rice", "The research shows that reducing carbs will help your numbers"] },
+      strengths: "You showed genuine empathy when the patient mentioned cost concerns, and your open questions early in the session helped her open up about her family values around food. You resisted the urge to give unsolicited advice in several exchanges.",
+      growth: ["Practice complex reflections that name the underlying emotion, not just the content", "Explore ambivalence more fully before moving toward solutions", "Use decisional balance to help patient weigh pros and cons herself"],
+      stageCorrect: false, // student often picks contemplation
+      rulerEstimate: 3,
+      biasPatterns: [{ cat:"Cultural Assumption", sev:"moderate", quote:"You really should try cutting back on rice", explain:"Naming a culturally central food as a barrier without first exploring its meaning may signal that the clinician views the patient's culture as an obstacle rather than a context to work within.", alt:"Ask what foods are most important to her and explore modifications that honor those traditions." }],
+      equityScore: 71,
+      equityStrengths: ["Acknowledged cost concerns when raised by patient", "Did not push patient to commit to a goal she wasn't ready for"]
+    }
+  },
+  { id:"james", name:"James Okafor", age:34, pronoun:"he/him", condition:"Hypertension + Obesity",
+    readinessStage:"contemplation", skinTone:"#8D5524", avatar:"👨🏾‍💼",
+    scripts: {
+      opening: "Hey, so I know I should probably be doing better with the eating and the exercise thing. I've been meaning to. Life just gets in the way, you know? The job, the commute… [chuckles] Maybe this time it'll stick.",
+      responses: [
+        { trigger: "open", text: "Honestly? I think about my dad. He had a heart attack at 52. I don't want that. But then I get home at 8pm and I'm just... ordering food. It's easier." },
+        { trigger: "reflect", text: "Yeah, I do know what I should do. That's kind of the frustrating part. [laughs] I have like five nutrition apps on my phone I never open." },
+        { trigger: "advice", text: "[leaning back slightly] Yeah I've tried meal prep. I did it for two weeks. Then I traveled for work and that was that." },
+        { trigger: "default", text: "I mean, I'm not opposed to making a change. I just haven't found the thing that works for me yet. Everything feels like a lot." },
+        { trigger: "affirm", text: "[sits up a bit straighter] I appreciate that. I do think I'm more ready now than I was a year ago. My dad's been on my mind more lately." }
+      ],
+      nvCues: [
+        { description:"relaxed posture, occasional humor — engaged but deflecting", intensity:2 },
+        { description:"leans back, arms loose — amused detachment", intensity:1 },
+        { description:"brief shift forward when father is mentioned", intensity:2 },
+        { description:"looks at ceiling briefly, processing", intensity:1 },
+        { description:"sits up straighter, more direct eye contact", intensity:2 }
+      ],
+      miScores: { overall:74, spirit:78, skills: { openQ:8, reflections:6, affirmations:7, summaries:5, changeTalk:7, resistance:7 }, righting:["You should really try meal prep — it's the most effective strategy"] },
+      strengths: "Strong use of open questions throughout. You elicited meaningful change talk around the patient's father and did well reflecting his ambivalence without amplifying resistance. Your affirmations felt genuine and well-timed.",
+      growth: ["Develop more complex reflections — go beyond content to name the emotion underneath", "Practice building a change plan collaboratively rather than suggesting strategies", "Try using a summary to consolidate the change talk before closing"],
+      stageCorrect: true,
+      rulerEstimate: 5,
+      biasPatterns: [{ cat:"Health Literacy Assumption", sev:"low", quote:"meal prep is the most effective strategy", explain:"Suggesting a specific strategy without exploring the patient's context assumes equal access to time, kitchen resources, and food budget.", alt:"Ask what has worked or not worked before, and explore what a realistic change might look like given his schedule." }],
+      equityScore: 82,
+      equityStrengths: ["Picked up on and reflected the emotional weight of the patient's mention of his father", "Did not make assumptions about the patient's diet based on race or background", "Acknowledged time and work constraints as real barriers"]
+    }
+  },
+  { id:"linda", name:"Linda Park", age:67, pronoun:"she/her", condition:"Chronic Kidney Disease (Stage 3)",
+    readinessStage:"preparation", skinTone:"#F1C27D", avatar:"👩🏻‍🦳",
+    scripts: {
+      opening: "Oh, I've been reading so much about CKD diets. I printed out several articles — I have them right here. But some of them contradict each other and I don't know what to believe. I really want to do this right.",
+      responses: [
+        { trigger: "open", text: "Well, I read that I shouldn't eat bananas or potatoes because of potassium. But then another source said sweet potatoes are fine? And I love doenjang jjigae — my husband needs it — but it's high in sodium. I don't know if I can make it anymore." },
+        { trigger: "reflect", text: "Yes, exactly. I want to help my kidneys and I want to keep cooking for my family. Those feel like they're in conflict and I don't know how to resolve it." },
+        { trigger: "advice", text: "[leans forward with pen ready] Oh, should I write that down? I brought a notebook. I want to get this exactly right. Can you go over the potassium guidelines specifically?" },
+        { trigger: "default", text: "I'm sorry, I have a lot of questions. I just want to make sure I understand everything. My daughter says I worry too much but I'd rather know too much than too little." },
+        { trigger: "affirm", text: "[visibly relaxes, exhales] That's actually really reassuring. I think I've been so worried about doing everything perfectly that I've been paralyzed. I can start with the sodium." }
+      ],
+      nvCues: [
+        { description:"papers spread on table, pen in hand — visibly anxious and prepared", intensity:3 },
+        { description:"nodding rapidly while taking notes", intensity:2 },
+        { description:"brief furrow of brow when guidelines conflict", intensity:2 },
+        { description:"leans forward, engaged and attentive", intensity:3 },
+        { description:"visibly relaxes, exhales slowly — tension releasing", intensity:3 }
+      ],
+      miScores: { overall:71, spirit:75, skills: { openQ:7, reflections:7, affirmations:6, summaries:8, changeTalk:6, resistance:5 }, righting:["I can walk you through the full potassium list right now", "Here's exactly what you should and shouldn't eat"] },
+      strengths: "Your summaries were a standout skill — you did an excellent job consolidating complex information back to the patient in a way that reduced her anxiety. You also used affirmations effectively to validate her preparation efforts.",
+      growth: ["Practice rolling with the patient's anxiety rather than trying to immediately resolve it with information", "Resist the pull to become a lecturer when the patient is asking for direct answers — use brief answers then return to exploration", "Explore the emotional side of dietary changes, not just the informational"],
+      stageCorrect: true,
+      rulerEstimate: 8,
+      biasPatterns: [],
+      equityScore: 88,
+      equityStrengths: ["Asked about specific cultural foods before making dietary recommendations", "Validated the patient's concern for her husband and family role", "Acknowledged the emotional burden of caregiving while managing her own illness"]
+    }
+  },
+  { id:"darius", name:"Darius Webb", age:19, pronoun:"he/him", condition:"Iron-Deficiency Anemia",
+    readinessStage:"action", skinTone:"#5C3317", avatar:"👨🏿‍🎓",
+    scripts: {
+      opening: "Yeah so I've been vegan for two years and I'm not changing that. I saw the lab results and I get that the iron is low. I just need to know how to fix it without eating meat. That's not happening.",
+      responses: [
+        { trigger: "open", text: "I eat lentils, spinach, some fortified stuff. But the dining hall options are pretty limited. Most vegan options are, like, a sad salad. I meal prep when I can but I don't always have time." },
+        { trigger: "reflect", text: "Yeah. I care a lot about this. I went vegan for the animals and the environment — it's not a diet trend for me. I just need to do it better, not stop doing it." },
+        { trigger: "advice", text: "[slight defensiveness] I know about absorption. I've researched this. I'm not just randomly eating. I just need help with what's actually available to me on campus." },
+        { trigger: "default", text: "I'm open to supplements if that's what it takes. I just want practical stuff I can actually do in a dorm with limited money. Be real with me." },
+        { trigger: "affirm", text: "[more relaxed, making eye contact] Okay yeah, that's helpful. I've been feeling pretty tired and I didn't realize how much the low iron was affecting me. I want to fix this." }
+      ],
+      nvCues: [
+        { description:"arms loose, direct eye contact — confident and ready to advocate", intensity:2 },
+        { description:"slight jaw tension when meat mentioned", intensity:2 },
+        { description:"nodding actively, leaning in — engaged", intensity:2 },
+        { description:"brief eye roll at generalized advice", intensity:3 },
+        { description:"relaxed shoulders, sustained eye contact — trusting", intensity:2 }
+      ],
+      miScores: { overall:79, spirit:82, skills: { openQ:8, reflections:7, affirmations:8, summaries:6, changeTalk:8, resistance:8 }, righting:[] },
+      strengths: "Strong session overall. You respected the patient's values around veganism without trying to negotiate them, which built trust quickly. Your affirmations were specific and non-patronizing, and you evoked substantial change talk around fatigue and motivation.",
+      growth: ["Continue developing your summaries — you had strong individual exchanges but didn't synthesize them as a whole", "Explore financial barriers more deeply before making recommendations", "Practice asking permission before sharing information even with motivated patients"],
+      stageCorrect: true,
+      rulerEstimate: 8,
+      biasPatterns: [],
+      equityScore: 90,
+      equityStrengths: ["Respected patient's ethical commitment to veganism without questioning or minimizing it", "Acknowledged food insecurity and campus access as real constraints", "Did not make assumptions about the patient's knowledge level"]
+    }
+  },
+  { id:"carol", name:"Carol Martinez", age:45, pronoun:"she/her", condition:"Gestational Diabetes (2nd trimester)",
+    readinessStage:"action", skinTone:"#C68642", avatar:"🤰🏽",
+    scripts: {
+      opening: "I need to do whatever is best for the baby. I've been looking up gestational diabetes diets and I'm ready to start. I'm just scared I'm going to do something wrong and hurt her.",
+      responses: [
+        { trigger: "open", text: "I've been trying to cut out all sugar. Like, everything. But then my mom keeps bringing food over and she gets upset if I don't eat it. She thinks I'm being too extreme." },
+        { trigger: "reflect", text: "[quieter] Yeah. I had an eating disorder in my twenties. I'm scared that if I get too focused on restriction again it'll… go to a bad place. But I also can't not care about my blood sugar." },
+        { trigger: "advice", text: "[anxious, pen moving] Okay. Should I be logging every meal? I started a spreadsheet but then I got overwhelmed. What level of tracking do you recommend?"] },
+        { trigger: "default", text: "I just want someone to tell me what to do and promise me the baby will be okay. I know that's not realistic but that's how I feel." },
+        { trigger: "affirm", text: "[exhales, eyes slightly wet] I needed to hear that. I've been so hard on myself. My last doctor made me feel like everything I ate was wrong." }
+      ],
+      nvCues: [
+        { description:"hand on belly, leaning slightly forward — anxious and protective", intensity:3 },
+        { description:"voice drops, eyes down briefly when eating disorder mentioned", intensity:4 },
+        { description:"pen clicking rapidly — anxious energy", intensity:2 },
+        { description:"tense shoulders, scanning face for reassurance", intensity:3 },
+        { description:"eyes slightly wet, exhales slowly — emotional release", intensity:4 }
+      ],
+      miScores: { overall:68, spirit:74, skills: { openQ:7, reflections:6, affirmations:5, summaries:5, changeTalk:6, resistance:6 }, righting:["You should be logging everything you eat", "Here's a meal plan you can follow"] },
+      strengths: "You handled the disclosure of eating disorder history with sensitivity and did not push past it. Your empathy was genuine and the patient responded well when you slowed down and acknowledged her fear.",
+      growth: ["Avoid jumping to structured recommendations (meal plans, logging) with patients who have eating disorder history — explore their relationship with food tracking first", "Ask permission before giving information, especially around restriction", "Practice trauma-informed framing — focus on adequacy and nourishment rather than restriction"],
+      stageCorrect: true,
+      rulerEstimate: 7,
+      biasPatterns: [{ cat:"Socioeconomic Assumption", sev:"low", quote:"Here's a meal plan you can follow", explain:"Providing a generic meal plan without exploring the patient's food access, cultural food preferences, or family food dynamics may miss critical context.", alt:"Ask what a typical day of eating looks like and what feels realistic given her family situation before offering any structured guidance." }],
+      equityScore: 78,
+      equityStrengths: ["Did not push past sensitive disclosure about eating disorder history", "Acknowledged family food dynamics as a real factor", "Expressed warmth and slowed pace when patient became emotional"]
+    }
+  }
+];
+
+const VISIT_TYPES = [
+  { id:"telehealth_audio", label:"Telehealth – Audio Only", icon:"📞", desc:"Voice call only. No visual cues." },
+  { id:"telehealth_video", label:"Telehealth – Video", icon:"💻", desc:"Video call. Nonverbal cues visible." },
+  { id:"in_person", label:"In-Person Visit", icon:"🏥", desc:"Face-to-face exam room." }
+];
+
+const FEEDBACK_MODES = [
+  { id:"realtime", label:"Real-time Hints", desc:"Coaching during visit" },
+  { id:"post", label:"Post-Session Only", desc:"Full debrief only" },
+  { id:"none", label:"Assessment Mode", desc:"No hints at all" }
+];
+
+const TTM_STAGES = [
+  { id:"precontemplation", label:"Precontemplation", desc:"Not yet considering change; may be unaware or resistant" },
+  { id:"contemplation", label:"Contemplation", desc:"Aware of the issue; thinking about change but ambivalent" },
+  { id:"preparation", label:"Preparation", desc:"Intending to act soon; making small steps" },
+  { id:"action", label:"Action", desc:"Actively making changes to behavior" },
+  { id:"maintenance", label:"Maintenance", desc:"Sustaining changes; working to prevent relapse" }
+];
+
+const NV_HINTS = { 1:"Subtle — easy to miss", 2:"Moderate — detectable with attention", 3:"Noticeable — most clinicians would catch this", 4:"Prominent — hard to miss" };
+const EXPRESSIONS = {
+  neutral:    { brows:[0,0],   eyeOpen:0.5, mouthCurve:0,  mouthOpen:0, eyeShift:0, label:"Neutral" },
+  engaged:    { brows:[-3,-3], eyeOpen:0.7, mouthCurve:6,  mouthOpen:0, eyeShift:0, label:"Engaged" },
+  guarded:    { brows:[4,4],   eyeOpen:0.35,mouthCurve:-3, mouthOpen:0, eyeShift:2, label:"Guarded" },
+  resistant:  { brows:[6,-2],  eyeOpen:0.3, mouthCurve:-5, mouthOpen:0, eyeShift:4, label:"Resistant" },
+  distressed: { brows:[5,5],   eyeOpen:0.6, mouthCurve:-4, mouthOpen:1, eyeShift:0, label:"Distressed" },
+  open:       { brows:[-5,-5], eyeOpen:0.8, mouthCurve:8,  mouthOpen:2, eyeShift:0, label:"Open" }
+};
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let state = {
+  phase: "setup",
+  config: {},
+  messages: [],
+  nonverbalLog: [],
+  turnCount: 0,
+  expressionKey: "neutral",
+  isSpeaking: false,
+  notes: "",
+  notesVisible: false,
+  miHintTimer: null,
+  scriptIdx: 0,
+  selectedTTM: null,
+  selectedRuler: null,
+  assessment: {}
+};
+
+// ─── PHASES ───────────────────────────────────────────────────────────────────
+const PHASES = ["Setup","Environment","Encounter","Assessment","Debrief"];
+function updatePhaseBar() {
+  const idx = ["setup","env","encounter","assessment","debrief"].indexOf(state.phase);
+  const bar = document.getElementById('phaseBar');
+  bar.innerHTML = PHASES.map((label,i) => {
+    const done = i < idx, active = i === idx;
+    return `<div class="phase-item">
+      <div class="phase-dot ${done?'done':active?'active':''}">${done?'✓':i+1}</div>
+      <span class="phase-label ${done?'done':active?'active':''}">${label}</span>
+      ${i<PHASES.length-1?'<span class="phase-sep">›</span>':''}
+    </div>`;
+  }).join('');
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  state.phase = id;
+  updatePhaseBar();
+  window.scrollTo(0,0);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+function initApp() {
+  updatePhaseBar();
+  buildSetup();
+}
+
+function buildSetup() {
+  // Visit types
+  const vg = document.getElementById('visitTypeGrid');
+  vg.innerHTML = VISIT_TYPES.map(v =>
+    `<div class="select-card" id="vt-${v.id}" data-id="${v.id}" onclick="selectVisitType(this.dataset.id)">
+      <div class="card-icon">${v.icon}</div>
+      <div class="card-title">${v.label}</div>
+      <div class="card-desc">${v.desc}</div>
+    </div>`
+  ).join('');
+
+  // Patients — NO readiness stage label shown
+  const pg = document.getElementById('patientGrid');
+  pg.innerHTML = PERSONAS.map(p =>
+    `<div class="patient-card" id="pt-${p.id}" data-id="${p.id}" onclick="selectPatient(this.dataset.id)">
+      <span class="patient-avatar">${p.avatar}</span>
+      <div>
+        <div class="patient-name">${p.name}<span class="badge badge-age">${p.age}yo</span></div>
+        <div class="patient-meta">${p.condition} · ${p.scripts.opening.slice(0,50)}…</div>
+      </div>
+    </div>`
+  ).join('');
+
+  // Feedback modes
+  const fg = document.getElementById('feedbackModeGrid');
+  fg.innerHTML = FEEDBACK_MODES.map(f =>
+    `<div class="select-card" id="fm-${f.id}" data-id="${f.id}" onclick="selectFeedback(this.dataset.id)">
+      <div class="card-title">${f.label}</div>
+      <div class="card-desc">${f.desc}</div>
+    </div>`
+  ).join('');
+
+  document.getElementById('studentName').addEventListener('input', checkSetupReady);
+  selectFeedback('realtime');
+}
+
+function selectVisitType(id) {
+  document.querySelectorAll('[id^="vt-"]').forEach(el => el.classList.remove('selected'));
+  document.getElementById('vt-'+id).classList.add('selected');
+  state.config.visitType = id;
+  checkSetupReady();
+}
+function selectPatient(id) {
+  document.querySelectorAll('[id^="pt-"]').forEach(el => el.classList.remove('selected'));
+  document.getElementById('pt-'+id).classList.add('selected');
+  state.config.persona = PERSONAS.find(p => p.id === id);
+  checkSetupReady();
+}
+function selectFeedback(id) {
+  document.querySelectorAll('[id^="fm-"]').forEach(el => el.classList.remove('selected'));
+  document.getElementById('fm-'+id).classList.add('selected');
+  state.config.feedbackMode = id;
+}
+function checkSetupReady() {
+  const ready = state.config.visitType && state.config.persona && document.getElementById('studentName').value.trim();
+  document.getElementById('startBtn').disabled = !ready;
+}
+
+// ─── SESSION START ────────────────────────────────────────────────────────────
+function startSession() {
+  state.config.studentName = document.getElementById('studentName').value.trim();
+  buildEnvCheck();
+  showScreen('env');
+}
+
+// ─── ENV CHECK ────────────────────────────────────────────────────────────────
+const ENV_QUESTIONS = {
+  telehealth_audio: [
+    { id:"intro", label:"Will you introduce yourself professionally?", opts:["Yes, name, role, and purpose","Name only","Not planned"] },
+    { id:"privacy", label:"Will you confirm patient's privacy and location?", opts:["Yes, explicitly","Will assume private","Did not plan to address"] },
+    { id:"audio", label:"Plan for confirming call quality?", opts:["Yes, will check with patient","Assume connection is fine","No plan"] },
+    { id:"doc", label:"Documentation plan without visual confirmation?", opts:["Plan in place, will summarize verbally","Will type notes silently","No plan"] }
+  ],
+  telehealth_video: [
+    { id:"bg", label:"Your video background?", opts:["Clean, neutral, professional","Home setting (visible clutter)","Virtual/blurred background"] },
+    { id:"lighting", label:"Lighting in your frame?", opts:["Well-lit, facing light source","Backlit (face shadowed)","Dim lighting"] },
+    { id:"camera", label:"Camera position?", opts:["Eye level, centered","Below eye level","Off to the side"] },
+    { id:"audio", label:"Audio setup?", opts:["Headphones or quiet space","Open speaker, quiet room","Background noise present"] },
+    { id:"ptprivacy", label:"Will you confirm patient's privacy at the start?", opts:["Yes, will ask explicitly","Will assume they're private","Did not plan to address"] }
+  ],
+  in_person: [
+    { id:"room", label:"Is the room private with a door that closes?", opts:["Yes, fully private","Semi-private (curtain)","Open/shared space"] },
+    { id:"seating", label:"How is patient seating arranged?", opts:["Chairs at equal level, no desk barrier","Student behind desk","Standing"] },
+    { id:"materials", label:"Patient education materials ready?", opts:["Yes, personalized to this patient","Generic materials","None prepared"] },
+    { id:"intro", label:"Prepared your introduction and visit purpose?", opts:["Yes, clearly planned","Partially","Not yet"] }
+  ]
+};
+
+const ENV_FEEDBACK = {
+  telehealth_audio: { score:88, items:[{s:"pass",t:"Professional introduction",d:"Great — establishing your role and purpose sets the tone for a therapeutic alliance."},{s:"pass",t:"Privacy confirmation",d:"Confirming patient privacy is essential in audio telehealth — you planned for this."},{s:"warn",t:"Audio quality check",d:"Always verify both sides can hear clearly before diving into sensitive topics."},{s:"pass",t:"Documentation plan",d:"Verbal summaries help patients feel heard and give you a check on accuracy."}], tip:"For audio-only telehealth, your voice becomes your entire clinical presence. Warm your tone, slow your pace, and use verbal affirmations more frequently than you would in person." },
+  telehealth_video: { score:82, items:[{s:"pass",t:"Professional background",d:"A clean background signals professionalism and reduces patient distraction."},{s:"warn",t:"Lighting",d:"Ensure light faces you — backlighting obscures facial expression, limiting the patient's ability to read your nonverbal communication."},{s:"pass",t:"Camera at eye level",d:"Eye-level framing creates a sense of equal standing. Below eye-level can feel unintentionally dominant."},{s:"pass",t:"Audio quality",d:"Headphones dramatically reduce echo and ambient noise — good choice."},{s:"pass",t:"Patient privacy check",d:"Asking explicitly acknowledges the patient's context without assuming."}], tip:"Video telehealth creates a unique challenge: you must read the patient's nonverbal cues through a screen while also being conscious of how you appear on theirs. Both directions matter." },
+  in_person: { score:91, items:[{s:"pass",t:"Private room",d:"Privacy is foundational — patients disclose more when they feel secure."},{s:"pass",t:"Equal seating arrangement",d:"Removing physical barriers (like a desk between you) signals partnership, not hierarchy."},{s:"pass",t:"Personalized materials",d:"Bringing patient-specific materials signals preparation and respect for the individual."},{s:"pass",t:"Introduction prepared",d:"A warm, clear introduction reduces patient anxiety and frames the purpose of the visit."}], tip:"In-person visits offer the richest nonverbal data. Attend to body language, proxemics (physical distance), and micro-expressions — these often tell you more than the patient's words." }
+};
+
+function buildEnvCheck() {
+  document.getElementById('envVisitLabel').textContent = VISIT_TYPES.find(v=>v.id===state.config.visitType)?.label;
+  const qs = ENV_QUESTIONS[state.config.visitType];
+  state.envAnswers = {};
+  const container = document.getElementById('envQuestions');
+  container.innerHTML = qs.map(q =>
+    `<div class="env-question">
+      <div class="env-q-label">${q.label}</div>
+      ${q.opts.map(opt => `<div class="env-option" data-q="${q.id}" data-v="${opt}" data-q="${q.id}" onclick="selectEnvOption(this, this.dataset.q)">${opt}</div>`).join('')}
+    </div>`
+  ).join('');
+}
+function selectEnvOption(el, qid) {
+  document.querySelectorAll(`[data-q="${qid}"]`).forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  state.envAnswers[qid] = el.dataset.v;
+  const qs = ENV_QUESTIONS[state.config.visitType];
+  document.getElementById('envCheckBtn').disabled = qs.some(q => !state.envAnswers[q.id]);
+}
+function runEnvCheck() {
+  const fb = ENV_FEEDBACK[state.config.visitType];
+  const pass = fb.score >= 75;
+  const resultDiv = document.getElementById('envResult');
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = `
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:36px;margin-bottom:8px">${pass?'✅':'⚠️'}</div>
+      <div style="font-size:22px;font-weight:800;color:white">Setup Score: ${fb.score}/100</div>
+      <div style="font-size:14px;color:var(--text-muted);margin-top:4px">${pass?'Setup looks good — proceed to the encounter.':'Review these issues before proceeding.'}</div>
+    </div>
+    ${fb.items.map(item => `
+      <div class="env-result-card">
+        <span class="env-result-icon">${item.s==='pass'?'✅':item.s==='warn'?'⚠️':'❌'}</span>
+        <div><div class="env-result-title">${item.t}</div><div class="env-result-desc">${item.d}</div></div>
+      </div>
+    `).join('')}
+    <div class="tip-box"><div class="tip-label">BEST PRACTICE TIP</div><div class="tip-text">${fb.tip}</div></div>
+    <button class="primary-btn" onclick="startEncounter()">${pass?'Begin Patient Encounter →':'Proceed Anyway →'}</button>
+  `;
+  document.getElementById('envCheckBtn').style.display = 'none';
+  document.querySelectorAll('.env-question').forEach(q => q.style.pointerEvents = 'none');
+}
+
+// ─── ENCOUNTER ────────────────────────────────────────────────────────────────
+function startEncounter() {
+  state.messages = [];
+  state.nonverbalLog = [];
+  state.turnCount = 0;
+  state.expressionKey = 'neutral';
+  state.scriptIdx = 0;
+  buildVisualLayer();
+  showScreen('encounter');
+  // Opening message with slight delay
+  setTimeout(() => {
+    const p = state.config.persona;
+    const hasVisual = state.config.visitType !== 'telehealth_audio';
+    const nv = hasVisual ? p.scripts.nvCues[0] : null;
+    addMessage('patient', p.scripts.opening, nv);
+    if (nv) {
+      state.nonverbalLog.push({ turn:0, ...nv });
+      updateCurrentNv(nv);
+      updateExpression(nv.description);
+    }
+  }, 600);
+}
+
+function buildVisualLayer() {
+  const vl = document.getElementById('visualLayer');
+  const vt = state.config.visitType;
+  const p = state.config.persona;
+  if (vt === 'telehealth_audio') {
+    vl.innerHTML = buildAudioUI(p);
+  } else if (vt === 'telehealth_video') {
+    vl.innerHTML = buildVideoUI(p);
+  } else {
+    vl.innerHTML = buildInPersonUI(p);
+  }
+}
+
+function buildAudioUI(p) {
+  return `<div class="audio-ui">
+    <div class="audio-avatar-wrap">
+      <div class="audio-avatar" style="background:linear-gradient(135deg,${p.skinTone}55,rgba(255,255,255,0.04))">${p.avatar}</div>
+      <div class="audio-ring" id="audioRing"></div>
+    </div>
+    <div class="audio-name">${p.name}</div>
+    <div class="audio-cond">${p.age}yo · ${p.condition}</div>
+    <div class="audio-status"><div class="audio-dot"></div><span class="audio-label" id="audioTurnLabel">📞 AUDIO CALL · 0 EXCHANGES</span></div>
+    <div class="audio-note">No video · Listen for tone, pacing, silence, word choice</div>
+  </div>`;
+}
+
+function buildVideoUI(p) {
+  return `<div class="video-ui">
+    <div class="video-bar">
+      <div class="video-status"><div class="video-dot"></div><span class="video-label">💻 TELEHEALTH VIDEO · <span id="videoTurnLabel">0</span> exchanges</span></div>
+      <span class="video-time" id="videoTime"></span>
+    </div>
+    <div class="video-tiles">
+      <div class="patient-tile" id="patientTile">
+        ${buildFaceSVG(p, 'neutral')}
+        <div class="tile-name-bar">
+          <span class="tile-name">${p.name}</span>
+          <span class="tile-speaking" id="speakingBadge" style="display:none">Speaking</span>
+        </div>
+      </div>
+      <div class="self-col">
+        <div class="self-tile"><div class="self-tile-inner"><div class="self-tile-icon">🎓</div><div class="self-tile-label">YOU</div></div></div>
+        <div class="observe-panel">
+          <div class="observe-label">OBSERVE</div>
+          <div id="nvTagContainer"><span style="font-size:12px;color:var(--text-dim);font-style:italic">Watching for cues…</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="video-toolbar">
+      <div class="toolbar-btn"><span class="tb-icon">🎤</span>Mute</div>
+      <div class="toolbar-btn"><span class="tb-icon">📹</span>Stop Cam</div>
+      <div class="toolbar-btn"><span class="tb-icon">💬</span>Chat</div>
+      <div class="toolbar-btn"><span class="tb-icon">📋</span>Notes</div>
+    </div>
+  </div>`;
+}
+
+function buildInPersonUI(p) {
+  return `<div class="inperson-ui">
+    <div class="ip-room-bg"></div>
+    <div class="ip-wall"></div>
+    <div class="ip-floor"></div>
+    <div class="ip-table"></div>
+    <div class="ip-paper"></div>
+    <div class="ip-observe">
+      <div style="font-size:11px;color:rgba(60,40,20,0.5);font-family:'DM Mono',monospace;text-align:right;letter-spacing:1px">OBSERVE</div>
+      <div id="ipNvContainer"><div style="font-size:12px;color:rgba(60,40,20,0.35);font-style:italic;text-align:right">Watching for cues…</div></div>
+    </div>
+    <div class="ip-header">
+      <div class="ip-header-label"><span>🏥</span>IN-PERSON VISIT · <span id="ipTurnLabel">0</span> exchanges</div>
+      <span class="ip-time" id="ipTime"></span>
+    </div>
+    <div class="ip-patient-area">
+      <div class="ip-chair-back"></div>
+      <div class="ip-chair-seat"></div>
+      <div class="ip-face-wrap">${buildFaceSVG(p, 'neutral')}</div>
+    </div>
+    <div class="ip-footer">
+      <div class="ip-patient-info">
+        <span style="font-size:16px">${p.avatar}</span>
+        <span class="ip-patient-name">${p.name}</span>
+        <span class="ip-condition">${p.condition}</span>
+      </div>
+      <span class="ip-speaking" id="ipSpeaking" style="display:none">Speaking</span>
+    </div>
+  </div>`;
+}
+
+// Update clock
+setInterval(() => {
+  const t = new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+  const vt = document.getElementById('videoTime'); if(vt) vt.textContent = t;
+  const it = document.getElementById('ipTime'); if(it) it.textContent = t;
+}, 1000);
+
+function buildFaceSVG(p, exprKey) {
+  const expr = EXPRESSIONS[exprKey] || EXPRESSIONS.neutral;
+  const skin = p.skinTone, hair = '#2d1a0e', eyeCol = '#3d2b1f';
+  const h = 9 * expr.eyeOpen;
+  const sx = expr.eyeShift;
+  const mx=100, my=148, mc=expr.mouthCurve, mo=expr.mouthOpen;
+  const mPath = mo>0 ? `M${mx-16} ${my} Q${mx} ${my+mc} ${mx+16} ${my} Q${mx} ${my+mc+mo*4} ${mx-16} ${my}` : `M${mx-16} ${my} Q${mx} ${my+mc} ${mx+16} ${my}`;
+  function eye(cx,cy,shift) {
+    const ox = shift * sx;
+    return `<g transform="translate(${cx+ox},${cy})">
+      <ellipse rx="10" ry="${h}" fill="white"/>
+      <ellipse rx="6" ry="${Math.min(h,6)}" fill="${eyeCol}"/>
+      <ellipse rx="3.5" ry="${Math.min(h,3.5)}" fill="#111"/>
+      <ellipse cx="2" cy="-1" rx="1.5" ry="1.5" fill="white" opacity="0.7"/>
+    </g>`;
+  }
+  function brow(cx,cy,lift) {
+    return `<path d="M${cx-12} ${cy+lift} Q${cx} ${cy+lift-4} ${cx+12} ${cy+lift}" stroke="${hair}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+  }
+  return `<svg viewBox="0 0 200 200" style="width:100%;height:100%;transition:all 0.5s ease">
+    <defs>
+      <radialGradient id="bgF" cx="50%" cy="40%" r="60%"><stop offset="0%" stop-color="${skin}" stop-opacity="0.15"/><stop offset="100%" stop-color="#0a1520" stop-opacity="1"/></radialGradient>
+      <radialGradient id="skF" cx="50%" cy="40%" r="55%"><stop offset="0%" stop-color="${skin}"/><stop offset="100%" stop-color="${skin}" stop-opacity="0.85"/></radialGradient>
+    </defs>
+    <rect width="200" height="200" fill="url(#bgF)" rx="10"/>
+    <ellipse cx="100" cy="230" rx="80" ry="55" fill="${skin}" opacity="0.5"/>
+    <rect x="82" y="162" width="36" height="40" fill="url(#skF)" rx="8"/>
+    <ellipse cx="100" cy="105" rx="62" ry="72" fill="url(#skF)"/>
+    <ellipse cx="100" cy="55" rx="63" ry="35" fill="${hair}"/>
+    <ellipse cx="100" cy="42" rx="48" ry="22" fill="${hair}"/>
+    <ellipse cx="42" cy="100" rx="12" ry="30" fill="${hair}"/>
+    <ellipse cx="158" cy="100" rx="12" ry="30" fill="${hair}"/>
+    <ellipse cx="38" cy="112" rx="8" ry="11" fill="${skin}"/>
+    <ellipse cx="162" cy="112" rx="8" ry="11" fill="${skin}"/>
+    ${brow(72,88,expr.brows[0])}${brow(128,88,expr.brows[1])}
+    ${eye(72,100,-1)}${eye(128,100,1)}
+    <path d="M100 108 Q96 122 92 126 Q100 130 108 126 Q104 122 100 108" fill="${skin}" stroke="rgba(0,0,0,0.1)" stroke-width="0.8"/>
+    <path d="${mPath}" fill="${mo>0?'#a0522d':'none'}" stroke="#8B4513" stroke-width="2" stroke-linecap="round"/>
+    <rect x="4" y="175" width="90" height="20" rx="5" fill="rgba(0,0,0,0.55)"/>
+    <text x="49" y="189" text-anchor="middle" fill="#5eead4" font-size="11" font-family="'DM Mono',monospace">${EXPRESSIONS[exprKey]?.label||'Neutral'}</text>
+  </svg>`;
+}
+
+function updateExpression(desc) {
+  const stage = state.config.persona.readinessStage;
+  const d = (desc||'').toLowerCase();
+  let key = 'neutral';
+  if (d.includes('smil')||d.includes('leans forward')||d.includes('nod')) key='open';
+  else if (d.includes('cross')||d.includes('frown')||d.includes('turn away')) key='resistant';
+  else if (d.includes('tense')||d.includes('tearful')||d.includes('anxious')||d.includes('distress')||d.includes('wet')) key='distressed';
+  else if (d.includes('avoid')||d.includes('look down')||d.includes('guard')) key='guarded';
+  else if (d.includes('attentive')||d.includes('engag')||d.includes('straighter')) key='engaged';
+  else key = {precontemplation:'guarded',contemplation:'neutral',preparation:'engaged',action:'open',maintenance:'open'}[stage]||'neutral';
+  state.expressionKey = key;
+  const p = state.config.persona;
+  // Update face in video/in-person
+  const tile = document.getElementById('patientTile');
+  if (tile) tile.innerHTML = buildFaceSVG(p, key) + tile.innerHTML.slice(tile.innerHTML.indexOf('<div class="tile-name-bar"'));
+  const ipWrap = document.querySelector('.ip-face-wrap');
+  if (ipWrap) ipWrap.innerHTML = buildFaceSVG(p, key);
+}
+
+function updateCurrentNv(nv) {
+  if (!nv) return;
+  const color = nv.intensity>=3?'#f59e0b':nv.intensity===2?'#60a5fa':'#94a3b8';
+  const dots = '●'.repeat(nv.intensity);
+  const tagHTML = `<div class="nv-tag" data-desc="${nv.description}" data-hint="${NV_HINTS[nv.intensity]}" onclick="revealNvTag(this)">
+    <span class="nv-dots" style="color:${color}">${dots}</span>
+    <span class="nv-text">Nonverbal cue — tap for hint</span>
+  </div>`;
+  const vc = document.getElementById('nvTagContainer');
+  if (vc) vc.innerHTML = tagHTML;
+  const ic = document.getElementById('ipNvContainer');
+  if (ic) ic.innerHTML = tagHTML;
+}
+
+function setSpeaking(active) {
+  state.isSpeaking = active;
+  const ring = document.getElementById('audioRing');
+  if (ring) ring.classList.toggle('active', active);
+  const tile = document.getElementById('patientTile');
+  if (tile) tile.classList.toggle('speaking', active);
+  const badge = document.getElementById('speakingBadge');
+  if (badge) badge.style.display = active ? 'inline-block' : 'none';
+  const ipSpeak = document.getElementById('ipSpeaking');
+  if (ipSpeak) ipSpeak.style.display = active ? 'block' : 'none';
+}
+
+function updateTurnLabel() {
+  const tl = document.getElementById('audioTurnLabel');
+  if (tl) tl.textContent = `📞 AUDIO CALL · ${state.turnCount} EXCHANGES`;
+  const vtl = document.getElementById('videoTurnLabel');
+  if (vtl) vtl.textContent = state.turnCount;
+  const itl = document.getElementById('ipTurnLabel');
+  if (itl) itl.textContent = state.turnCount;
+}
+
+// ─── SCRIPTED RESPONSES ───────────────────────────────────────────────────────
+function getScriptedResponse(studentText) {
+  const p = state.config.persona;
+  const scripts = p.scripts.responses;
+  const lower = studentText.toLowerCase();
+  let match = null;
+  if (lower.includes('feel') || lower.includes('sounds like') || lower.includes('seems like') || lower.includes('hear you')) {
+    match = scripts.find(s => s.trigger === 'reflect');
+  } else if (lower.includes('?') && (lower.includes('what') || lower.includes('how') || lower.includes('tell me') || lower.includes('can you'))) {
+    match = scripts.find(s => s.trigger === 'open');
+  } else if (lower.includes('you should') || lower.includes('you need to') || lower.includes('i recommend') || lower.includes('try ') || lower.includes('make sure')) {
+    match = scripts.find(s => s.trigger === 'advice');
+  } else if (lower.includes('appreciate') || lower.includes('great') || lower.includes('wonderful') || lower.includes('good job') || lower.includes("that's impressive")) {
+    match = scripts.find(s => s.trigger === 'affirm');
+  }
+  if (!match) {
+    const idx = state.scriptIdx % scripts.filter(s=>s.trigger==='default').length;
+    const defaults = scripts.filter(s=>s.trigger==='default');
+    match = defaults[idx] || scripts[state.scriptIdx % scripts.length];
+    state.scriptIdx++;
+  }
+  return match ? match.text : scripts[state.scriptIdx++ % scripts.length].text;
+}
+
+function getScriptedHint(studentText) {
+  const lower = studentText.toLowerCase();
+  if (lower.includes('you should') || lower.includes('you need to') || lower.includes('i recommend')) {
+    return "Watch for the righting reflex — instead of recommending, try asking what the patient thinks would help.";
+  }
+  if (!lower.includes('?')) {
+    return "Try adding an open question to invite the patient to elaborate on their perspective.";
+  }
+  if (lower.includes('feel') || lower.includes('sounds like')) {
+    return "Good reflection — consider deepening it by naming the emotion you're sensing underneath.";
+  }
+  return "Keep exploring the patient's own reasons for change before moving toward any plan.";
+}
+
+// ─── CHAT ─────────────────────────────────────────────────────────────────────
+function addMessage(role, text, nv) {
+  const p = state.config.persona;
+  const area = document.getElementById('chatArea');
+  const div = document.createElement('div');
+  div.className = `msg-wrap ${role}`;
+  div.innerHTML = `
+    <div class="msg-sender">${role==='patient'?p.name.split(' ')[0]:'You'}</div>
+    <div class="msg-bubble ${role}">${text}</div>
+    ${nv ? `<div style="margin-top:4px">${buildNvTag(nv)}</div>` : ''}
+  `;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+  state.messages.push({ role, text, nv });
+}
+
+function buildNvTag(nv) {
+  const color = nv.intensity>=3?'#f59e0b':nv.intensity===2?'#60a5fa':'#94a3b8';
+  const dots = '●'.repeat(nv.intensity);
+  return `<div class="nv-tag" data-desc="${nv.description}" data-hint="${NV_HINTS[nv.intensity]}" onclick="revealNvTag(this)">
+    <span class="nv-dots" style="color:${color}">${dots}</span>
+    <span class="nv-text">Nonverbal cue — tap for hint</span>
+  </div>`;
+}
+
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+function updateSendBtn() {
+  const val = document.getElementById('chatInput').value.trim();
+  document.getElementById('sendBtn').classList.toggle('ready', val.length > 0);
+}
+
+function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  document.getElementById('sendBtn').classList.remove('ready');
+  state.turnCount++;
+  updateTurnLabel();
+  addMessage('student', text, null);
+
+  // MI hint
+  if (state.config.feedbackMode === 'realtime') {
+    const hint = getScriptedHint(text);
+    showMiHint(hint);
+  }
+
+  // Show typing
+  const typing = document.getElementById('typingIndicator');
+  if (!document.getElementById('typingIndicator')) {
+    const t = document.createElement('div');
+    t.id = 'typingIndicator';
+    t.className = 'msg-typing';
+    t.textContent = state.config.persona.name.split(' ')[0] + ' is responding…';
+    document.getElementById('chatArea').appendChild(t);
+  }
+  document.getElementById('typingIndicator').classList.add('visible');
+  setSpeaking(false);
+
+  setTimeout(() => {
+    document.getElementById('typingIndicator').classList.remove('visible');
+    const p = state.config.persona;
+    const hasVisual = state.config.visitType !== 'telehealth_audio';
+    const resp = getScriptedResponse(text);
+    const nvIdx = state.turnCount % p.scripts.nvCues.length;
+    const nv = hasVisual ? p.scripts.nvCues[nvIdx] : null;
+    addMessage('patient', resp, nv);
+    if (nv) {
+      state.nonverbalLog.push({ turn: state.turnCount, ...nv });
+      updateCurrentNv(nv);
+      updateExpression(nv.description);
+    }
+    setSpeaking(true);
+    setTimeout(() => setSpeaking(false), 3500);
+  }, 1200 + Math.random() * 800);
+}
+
+function showMiHint(hint) {
+  if (state.miHintTimer) clearTimeout(state.miHintTimer);
+  const bar = document.getElementById('miHintBar');
+  document.getElementById('miHintText').textContent = hint;
+  bar.style.display = 'flex';
+  state.miHintTimer = setTimeout(() => { bar.style.display = 'none'; }, 9000);
+}
+
+function toggleNotes() {
+  state.notesVisible = !state.notesVisible;
+  document.getElementById('notesPanel').style.display = state.notesVisible ? 'block' : 'none';
+  document.getElementById('notesToggleBtn').classList.toggle('active', state.notesVisible);
+}
+
+function showEndModal() { document.getElementById('endModal').classList.add('visible'); }
+function hideEndModal() { document.getElementById('endModal').classList.remove('visible'); }
+
+function endEncounter() {
+  state.notes = document.getElementById('notesTA').value;
+  buildAssessment();
+  showScreen('assessment');
+}
+
+// ─── ASSESSMENT ───────────────────────────────────────────────────────────────
+function buildAssessment() {
+  const p = state.config.persona;
+  document.getElementById('assessStagePrompt').textContent = `Based on this encounter, which stage best describes ${p.name.split(' ')[0]}?`;
+  document.getElementById('assessRulerPrompt').innerHTML = `How ready did ${p.name.split(' ')[0]} seem to make a behavior change right now?<br><span style="font-size:13px;color:var(--text-dim)">1 = Not at all ready · 10 = Completely ready</span>`;
+
+  const ttmGrid = document.getElementById('ttmGrid');
+  state.selectedTTM = null;
+  ttmGrid.innerHTML = TTM_STAGES.map(s =>
+    `<div class="ttm-card" id="ttm-${s.id}" data-id="${s.id}" onclick="selectTTM(this.dataset.id)">
+      <div class="ttm-card-title">${s.label}</div>
+      <div class="ttm-card-desc">${s.desc}</div>
+    </div>`
+  ).join('');
+
+  const rulerRow = document.getElementById('rulerRow');
+  state.selectedRuler = null;
+  rulerRow.innerHTML = [1,2,3,4,5,6,7,8,9,10].map(n => {
+    const cls = n<=3?'r-low':n<=6?'r-mid':'r-high';
+    return `<div class="ruler-num ${cls}" id="ruler-${n}" data-n="${n}" onclick="selectRuler(parseInt(this.dataset.n))">${n}</div>`;
+  }).join('');
+
+  document.getElementById('sessionNotesTA').value = state.notes || '';
+  checkAssessReady();
+}
+
+function selectTTM(id) {
+  document.querySelectorAll('[id^="ttm-"]').forEach(el => el.classList.remove('selected'));
+  document.getElementById('ttm-'+id).classList.add('selected');
+  state.selectedTTM = id;
+  checkAssessReady();
+}
+function selectRuler(n) {
+  document.querySelectorAll('[id^="ruler-"]').forEach(el => el.classList.remove('selected'));
+  document.getElementById('ruler-'+n).classList.add('selected');
+  state.selectedRuler = n;
+  checkAssessReady();
+}
+function checkAssessReady() {
+  const ready = state.selectedTTM && state.selectedRuler &&
+    document.getElementById('changeTalkTA').value.trim() &&
+    document.getElementById('nextStepsTA').value.trim();
+  document.getElementById('assessSubmitBtn').disabled = !ready;
+}
+['changeTalkTA','sustainTalkTA','ambivalenceTA','patientGoalTA','nextStepsTA','sessionNotesTA'].forEach(id => {
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', checkAssessReady);
+  });
+});
+// Attach after DOM ready via mutation or direct:
+function attachAssessListeners() {
+  ['changeTalkTA','nextStepsTA'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', checkAssessReady);
+  });
+}
+
+function submitAssessment() {
+  state.assessment = {
+    stage: state.selectedTTM,
+    ruler: state.selectedRuler,
+    changeTalk: document.getElementById('changeTalkTA').value,
+    sustainTalk: document.getElementById('sustainTalkTA').value,
+    ambivalence: document.getElementById('ambivalenceTA').value,
+    patientGoal: document.getElementById('patientGoalTA').value,
+    nextSteps: document.getElementById('nextStepsTA').value,
+    notes: document.getElementById('sessionNotesTA').value
+  };
+  buildDebrief();
+  showScreen('debrief');
+}
+
+// ─── DEBRIEF ──────────────────────────────────────────────────────────────────
+function buildDebrief() {
+  const p = state.config.persona;
+  const a = state.assessment;
+  const sc = p.scripts;
+  const stageCorrect = a.stage === p.readinessStage;
+
+  document.getElementById('debriefMeta').textContent = `${p.name} · ${VISIT_TYPES.find(v=>v.id===state.config.visitType)?.label} · ${state.turnCount} exchanges`;
+
+  // Score rings
+  const rings = [
+    { score: sc.miScores.overall, label: "MI Overall" },
+    { score: sc.miScores.spirit, label: "MI Spirit" },
+    { score: sc.equityScore, label: "Equity" },
+    { score: stageCorrect ? 100 : 40, label: "Stage ID" }
+  ];
+  document.getElementById('scoreRingRow').innerHTML = rings.map(r => buildScoreRing(r.score, r.label)).join('');
+
+  // Tabs
+  const tabs = [
+    { id:"assessment", label:"📊 Your Assessment" },
+    { id:"mi", label:"🎯 MI Scoring" },
+    { id:"nonverbal", label:"👁️ Nonverbal Review" },
+    { id:"bias", label:"⚖️ Equity & Bias" }
+  ];
+  document.getElementById('tabBar').innerHTML = tabs.map((t,i) =>
+    `<button class="tab-btn ${i===0?'active':''}" data-id="${t.id}" onclick="switchTab(this.dataset.id, this)">${t.label}</button>`
+  ).join('');
+
+  // Tab content
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div class="tab-panel active" id="tab-assessment">${buildAssessmentTab(p, a, stageCorrect)}</div>
+    <div class="tab-panel" id="tab-mi">${buildMITab(p, sc)}</div>
+    <div class="tab-panel" id="tab-nonverbal">${buildNonverbalTab()}</div>
+    <div class="tab-panel" id="tab-bias">${buildBiasTab(p, sc)}</div>
+  `;
+
+  // Animate bars after render
+  setTimeout(() => {
+    document.querySelectorAll('.skill-bar-fill[data-width]').forEach(el => {
+      el.style.width = el.dataset.width + '%';
+    });
+    document.querySelectorAll('.ruler-fill[data-width]').forEach(el => {
+      el.style.width = el.dataset.width + '%';
+    });
+  }, 100);
+}
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+function buildScoreRing(score, label) {
+  const color = score>=80?'#22c55e':score>=60?'#f59e0b':'#ef4444';
+  const r=40, circ=2*Math.PI*r, dash=(score/100)*circ;
+  return `<div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+    <svg width="90" height="90">
+      <circle cx="45" cy="45" r="${r}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="7"/>
+      <circle cx="45" cy="45" r="${r}" fill="none" stroke="${color}" stroke-width="7"
+        stroke-dasharray="${dash} ${circ}" stroke-linecap="round"
+        style="transform:rotate(-90deg);transform-origin:50% 50%;transition:stroke-dasharray 1.2s ease"/>
+      <text x="45" y="47" text-anchor="middle" dominant-baseline="middle"
+        fill="white" font-size="20" font-weight="800" font-family="'DM Sans',sans-serif">${score}</text>
+    </svg>
+    <span style="font-size:13px;color:rgba(255,255,255,0.55);text-align:center">${label}</span>
+  </div>`;
+}
+
+function buildAssessmentTab(p, a, stageCorrect) {
+  const pct = a.ruler * 10;
+  const fields = [
+    { label:"Change Talk", val: a.changeTalk },
+    { label:"Sustain Talk", val: a.sustainTalk },
+    { label:"Ambivalence", val: a.ambivalence },
+    { label:"Patient Goal", val: a.patientGoal },
+    { label:"Next Steps Plan", val: a.nextSteps },
+    { label:"Session Notes", val: a.notes }
+  ].filter(f => f.val);
+
+  return `
+    <div class="score-pair">
+      <div class="score-box" style="background:${stageCorrect?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'};border:1px solid ${stageCorrect?'rgba(34,197,94,0.25)':'rgba(239,68,68,0.25)'}">
+        <div class="score-box-label">YOU IDENTIFIED</div>
+        <div class="score-box-val" style="color:${stageCorrect?'#22c55e':'#ef4444'}">${TTM_STAGES.find(s=>s.id===a.stage)?.label||a.stage}</div>
+        <div class="score-box-sub">${stageCorrect?'✓ Correct':'✗ Incorrect'}</div>
+      </div>
+      <div class="score-box" style="background:rgba(94,234,212,0.08);border:1px solid rgba(94,234,212,0.2)">
+        <div class="score-box-label">ACTUAL STAGE</div>
+        <div class="score-box-val" style="color:var(--teal-light)">${TTM_STAGES.find(s=>s.id===p.readinessStage)?.label}</div>
+        <div class="score-box-sub">${TTM_STAGES.find(s=>s.id===p.readinessStage)?.desc.slice(0,44)}…</div>
+      </div>
+    </div>
+    <div class="ttm-track">
+      ${TTM_STAGES.map((s,i) => {
+        const isActual = s.id === p.readinessStage, isPick = s.id === a.stage;
+        return `<div class="ttm-node">
+          ${i<TTM_STAGES.length-1?'<div class="ttm-line"></div>':''}
+          <div class="ttm-circle ${isActual?'actual':isPick?'pick':''}">${i+1}</div>
+          <div class="ttm-node-label">${s.id.slice(0,7).toUpperCase()}</div>
+          ${isActual?'<div class="ttm-node-sub" style="color:var(--teal-light)">actual</div>':''}
+          ${isPick&&!isActual?'<div class="ttm-node-sub" style="color:var(--amber)">your pick</div>':''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="ruler-display">
+      <div class="ruler-display-label">READINESS RULER — ${a.ruler}/10</div>
+      <div class="ruler-bar"><div class="ruler-fill" data-width="${pct}" style="width:0%"></div></div>
+      <div class="ruler-ends"><span>Not ready (1)</span><span>Very ready (10)</span></div>
+    </div>
+    ${fields.map(f => `<div class="field-card"><div class="field-card-label">${f.label}</div><div class="field-card-val">${f.val}</div></div>`).join('')}
+  `;
+}
+
+function buildMITab(p, sc) {
+  const skills = [
+    { label:"Open Questions", score: sc.miScores.skills.openQ },
+    { label:"Reflections", score: sc.miScores.skills.reflections },
+    { label:"Affirmations", score: sc.miScores.skills.affirmations },
+    { label:"Summaries", score: sc.miScores.skills.summaries },
+    { label:"Change Talk Evocation", score: sc.miScores.skills.changeTalk },
+    { label:"Rolling with Resistance", score: sc.miScores.skills.resistance }
+  ];
+  return `
+    <div class="strength-box">
+      <div class="strength-label">STRENGTHS</div>
+      <div class="strength-text">${sc.strengths}</div>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);font-family:'DM Mono',monospace;letter-spacing:1px;margin-bottom:12px">SKILL BREAKDOWN</div>
+    ${skills.map(s => {
+      const color = s.score>=8?'#22c55e':s.score>=6?'#f59e0b':'#ef4444';
+      return `<div class="skill-bar-wrap">
+        <div class="skill-bar-header">
+          <span class="skill-bar-name">${s.label}</span>
+          <span class="skill-bar-score" style="color:${color}">${s.score}/10</span>
+        </div>
+        <div class="skill-bar-bg"><div class="skill-bar-fill" data-width="${s.score*10}" style="width:0%;background:${color}"></div></div>
+      </div>`;
+    }).join('')}
+    ${sc.miScores.righting.length > 0 ? `
+      <div class="rr-box">
+        <div class="rr-label">⚠️ RIGHTING REFLEX DETECTED</div>
+        ${sc.miScores.righting.map(q => `<div class="rr-item">"${q}"</div>`).join('')}
+      </div>
+    ` : ''}
+    <div class="growth-box">
+      <div class="growth-label">GROWTH AREAS</div>
+      ${sc.growth.map(g => `<div class="growth-item"><span class="growth-arrow">→</span>${g}</div>`).join('')}
+    </div>
+  `;
+}
+
+function buildNonverbalTab() {
+  const vt = state.config.visitType;
+  if (vt === 'telehealth_audio') {
+    return `<div style="padding:30px;text-align:center;background:rgba(255,255,255,0.04);border-radius:12px">
+      <div style="font-size:32px;margin-bottom:12px">📞</div>
+      <p style="color:var(--text-muted);font-size:15px;line-height:1.7">Audio-only session — no visual cues available. You relied on vocal tone, pacing, silence, and word choice.</p>
+    </div>`;
+  }
+  if (state.nonverbalLog.length === 0) {
+    return `<div style="text-align:center;padding:40px;color:var(--text-muted)">No nonverbal cues logged.</div>`;
+  }
+  return `<div style="margin-bottom:14px;font-size:14px;color:var(--text-muted);line-height:1.6">${state.nonverbalLog.length} nonverbal cues were present during this encounter.</div>
+    ${state.nonverbalLog.map(nv => {
+      const color = nv.intensity>=3?'#f59e0b':nv.intensity===2?'#60a5fa':'#94a3b8';
+      return `<div class="nv-list-item">
+        <div class="nv-turn"><div class="nv-turn-label">TURN ${nv.turn}</div><div class="nv-turn-score" style="color:${color}">${nv.intensity}/4</div></div>
+        <div><div class="nv-desc">${nv.description}</div><div class="nv-hint">${NV_HINTS[nv.intensity]}</div></div>
+      </div>`;
+    }).join('')}`;
+}
+
+function buildBiasTab(p, sc) {
+  return `
+    <div class="score-pair" style="margin-bottom:16px">
+      <div class="score-box" style="background:rgba(255,255,255,0.04);border:1px solid var(--border)">
+        <div class="score-box-label">EQUITY SCORE</div>
+        <div class="score-box-val" style="color:${sc.equityScore>=80?'#22c55e':sc.equityScore>=60?'#f59e0b':'#ef4444'}">${sc.equityScore}/100</div>
+      </div>
+      <div style="padding:16px;background:rgba(255,255,255,0.04);border-radius:12px;border:1px solid var(--border)">
+        <div class="score-box-label">DEMO NOTE</div>
+        <div style="font-size:13px;color:var(--text-muted);line-height:1.5">In the live version, this analysis is generated by AI based on your actual transcript.</div>
+      </div>
+    </div>
+    ${sc.equityStrengths.length > 0 ? `
+      <div class="bias-strength-box">
+        <div class="bias-strength-label">✓ STRENGTHS IN EQUITY</div>
+        ${sc.equityStrengths.map(s => `<div class="bias-strength-item">• ${s}</div>`).join('')}
+      </div>
+    ` : ''}
+    ${sc.biasPatterns.length > 0 ? sc.biasPatterns.map(b => `
+      <div class="bias-pattern" style="border:1px solid rgba(${b.sev==='moderate'?'245,158,11':'148,163,184'},0.2)">
+        <div class="bias-pattern-header">
+          <span class="bias-pattern-cat">${b.cat}</span>
+          <span class="bias-sev">${b.sev}</span>
+        </div>
+        ${b.quote ? `<div class="bias-quote">"${b.quote}"</div>` : ''}
+        <div class="bias-explain">${b.explain}</div>
+        <div class="bias-alt">→ ${b.alt}</div>
+      </div>
+    `).join('') : '<div style="font-size:14px;color:var(--text-muted);font-style:italic;padding:12px 0">No significant bias patterns detected in this pre-scripted demo session.</div>'}
+    <div class="reflect-prompts">
+      <div class="reflect-label">REFLECT FURTHER</div>
+      <div class="reflect-item">1. How did your assumptions about this patient's background shape the questions you chose to ask?</div>
+      <div class="reflect-item">2. Were there moments where you felt uncomfortable? What does that discomfort signal?</div>
+      <div class="reflect-item">3. How might this patient's experience with the healthcare system have shaped their response to you?</div>
+    </div>
+  `;
+}
+
+// Attach assessment listeners after DOM updates
+document.addEventListener('input', function(e) {
+  if (['changeTalkTA','nextStepsTA'].includes(e.target.id)) checkAssessReady();
+});
+</script>
+</body>
+</html>
